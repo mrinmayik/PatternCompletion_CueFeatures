@@ -225,6 +225,74 @@ acc_GrpDegTt_contrast <- bind_rows(
   # Apply FDR correction to all p-values
   do(correct_p_vals(., "p.value"))
 
+##### Group x Trial Type x Scrambling interaction #####
+
+# Calculate estimated marginal means for Group x TrialType x Scrambling
+# These are averaged across Degradation levels (marginalized)
+# Shows the effect of scrambling condition separately for each group and trial type
+acc_GrpTtScr_emmeans <- emmeans::emmeans(
+  acc_GrpDegTtScr_lmerfinal, 
+  ~ Group * TrialType * Scrambling)
+# Test if accuracy differs from chance (50%) for each condition combination
+acc_GrpTtScr_chance <- emmeans::test(acc_GrpTtScr_emmeans, 
+                                     null = 50, 
+                                     side = 0)
+# Apply FDR correction for multiple comparisons
+acc_GrpTtScr_chance <- correct_p_vals(acc_GrpTtScr_chance, 
+                                      "p.value")
+
+# Reuse median degrees of freedom from previous analysis for effect size calculations
+median_df <- median(acc_GrpDegTt_emmeans %>% 
+                      as_tibble() %>% 
+                      pull(df))
+
+# Perform pairwise contrasts for Group x TrialType x Scrambling analysis
+# Combines multiple types of comparisons with effect sizes
+acc_GrpTtScr_contrast <- bind_rows(
+  # Compare groups (YA vs OA) within each TrialType x Scrambling combination
+  full_join(
+    # Contrast
+    emmeans::contrast(acc_GrpTtScr_emmeans, 
+                      method = "pairwise", 
+                      by = c("TrialType", "Scrambling")) %>% 
+      as_tibble() %>% 
+      rename(Within1 = TrialType,
+             Within2 = Scrambling),
+    # Cohen's d effect size
+    emmeans::eff_size(acc_GrpTtScr_emmeans, 
+                      sigma = sigma(lmerTest::get_model(acc_GrpDegTtScr_lmerstep)), 
+                      by = c("TrialType", "Scrambling"),
+                      edf = median_df) %>% 
+      as_tibble() %>% 
+      select(-c(df, SE)) %>% 
+      rename(Within1 = TrialType,
+             Within2 = Scrambling),
+    by = c("contrast", "Within1", "Within2")),
+  # Compare scrambling conditions (Intact vs Scrambled) within each Group x TrialType combination
+  # Tests if scrambling affects accuracy differently for each group and trial type
+  full_join(
+    # Contrast
+    emmeans::contrast(acc_GrpTtScr_emmeans, method = "pairwise", by = c("TrialType", "Group")) %>%
+      as_tibble() %>%
+      rename(Within1 = TrialType,
+             Within2 = Group),
+    # Cohen's d effect size
+    emmeans::eff_size(acc_GrpTtScr_emmeans,
+                      sigma = sigma(lmerTest::get_model(acc_GrpDegTtScr_lmerstep)), 
+                      by = c("TrialType", "Group"),
+                      edf = median_df) %>% 
+      as_tibble() %>% 
+      select(-c(df, SE)) %>% 
+      rename(Within1 = TrialType,
+             Within2 = Group),
+    by = c("contrast", "Within1", "Within2"))) %>% 
+  as.data.frame() %>% 
+  # Apply FDR correction to all p-values
+  do(correct_p_vals(., "p.value"))
+
+##### Plot #####
+
+# Group x Degradation x Trial Type interaction
 # Create annotation text for plot showing degradation slopes and significance
 # Formats slope coefficients and p-values for display in the figure
 # Uses plotmath syntax for mathematical notation in ggplot
@@ -313,72 +381,7 @@ acc_GrpDegTt_line <-
   y_axis_theme + x_axis_theme +
   blank_bg_theme + legend_theme + paper_facet_theme
 
-
-##### Group x Trial Type x Scrambling interaction #####
-
-# Calculate estimated marginal means for Group x TrialType x Scrambling
-# These are averaged across Degradation levels (marginalized)
-# Shows the effect of scrambling condition separately for each group and trial type
-acc_GrpTtScr_emmeans <- emmeans::emmeans(
-  acc_GrpDegTtScr_lmerfinal, 
-  ~ Group * TrialType * Scrambling)
-# Test if accuracy differs from chance (50%) for each condition combination
-acc_GrpTtScr_chance <- emmeans::test(acc_GrpTtScr_emmeans, 
-                                     null = 50, 
-                                     side = 0)
-# Apply FDR correction for multiple comparisons
-acc_GrpTtScr_chance <- correct_p_vals(acc_GrpTtScr_chance, 
-                                      "p.value")
-
-# Reuse median degrees of freedom from previous analysis for effect size calculations
-median_df <- median(acc_GrpDegTt_emmeans %>% 
-                      as_tibble() %>% 
-                      pull(df))
-
-# Perform pairwise contrasts for Group x TrialType x Scrambling analysis
-# Combines multiple types of comparisons with effect sizes
-acc_GrpTtScr_contrast <- bind_rows(
-  # Compare groups (YA vs OA) within each TrialType x Scrambling combination
-  full_join(
-    # Contrast
-    emmeans::contrast(acc_GrpTtScr_emmeans, 
-                      method = "pairwise", 
-                      by = c("TrialType", "Scrambling")) %>% 
-      as_tibble() %>% 
-      rename(Within1 = TrialType,
-             Within2 = Scrambling),
-    # Cohen's d effect size
-    emmeans::eff_size(acc_GrpTtScr_emmeans, 
-                      sigma = sigma(lmerTest::get_model(acc_GrpDegTtScr_lmerstep)), 
-                      by = c("TrialType", "Scrambling"),
-                      edf = median_df) %>% 
-      as_tibble() %>% 
-      select(-c(df, SE)) %>% 
-      rename(Within1 = TrialType,
-             Within2 = Scrambling),
-    by = c("contrast", "Within1", "Within2")),
-  # Compare scrambling conditions (Intact vs Scrambled) within each Group x TrialType combination
-  # Tests if scrambling affects accuracy differently for each group and trial type
-  full_join(
-    # Contrast
-    emmeans::contrast(acc_GrpTtScr_emmeans, method = "pairwise", by = c("TrialType", "Group")) %>%
-      as_tibble() %>%
-      rename(Within1 = TrialType,
-             Within2 = Group),
-    # Cohen's d effect size
-    emmeans::eff_size(acc_GrpTtScr_emmeans,
-                      sigma = sigma(lmerTest::get_model(acc_GrpDegTtScr_lmerstep)), 
-                      by = c("TrialType", "Group"),
-                      edf = median_df) %>% 
-      as_tibble() %>% 
-      select(-c(df, SE)) %>% 
-      rename(Within1 = TrialType,
-             Within2 = Group),
-    by = c("contrast", "Within1", "Within2"))) %>% 
-  as.data.frame() %>% 
-  # Apply FDR correction to all p-values
-  do(correct_p_vals(., "p.value"))
-
+# Group x Trial Type x Scrambling interaction
 # Create line plot showing accuracy as a function of scrambling condition
 # Separate panels for each TrialType, with separate lines for each Group
 acc_GDTt.predline <- 
@@ -413,6 +416,7 @@ acc_GDTt.predline <-
   # Apply custom themes for consistent formatting
   y_axis_theme + x_axis_theme +
   blank_bg_theme + legend_theme + paper_facet_theme
+
 
 # Combine both accuracy plots into a single figure
 # Top panel: Degradation effect, Bottom panel: Scrambling effect
@@ -547,16 +551,7 @@ rt_GrpDegTtScr_contrast <- bind_rows(
   # Apply FDR correction to all p-values
   do(correct_p_vals(., "p.value"))
 
-# Calculate y-axis range for RT plot
-# Determines appropriate limits based on the data range
-y_range <- range(rt_GrpDegTtScr_emmeans %>% 
-                   as_tibble() %>% 
-                   pull(emmean), 
-                 na.rm = TRUE)
-# Add padding above and below the data range
-y_range <- c(y_range[1] - 100, y_range[2] + 100)
-# Generate evenly spaced breaks for y-axis
-y_breaks <- pretty(y_range, n = 3)
+##### Plot #####
 
 # Create annotation text for RT plot showing degradation slopes and significance
 # Formats slope coefficients and p-values for display in the figure
@@ -598,10 +593,16 @@ rt_GrpDegTtScr_annot <- rt_GrpDegTtScr_trend %>%
          vjust = ifelse(Group == "YA", 0.5, 1.8),    # stack vertically
          hjust = -0.05)
 
-# Get unique trialtypes (for potential future use in separate plots)
-trialtypes <- unique(rt_GrpDegTtScr_emmeans %>% 
-                       as_tibble() %>% 
-                       pull(TrialType))
+# Calculate y-axis range for RT plot
+# Determines appropriate limits based on the data range
+y_range <- range(rt_GrpDegTtScr_emmeans %>% 
+                   as_tibble() %>% 
+                   pull(emmean), 
+                 na.rm = TRUE)
+# Add padding above and below the data range
+y_range <- c(y_range[1] - 100, y_range[2] + 100)
+# Generate evenly spaced breaks for y-axis
+y_breaks <- pretty(y_range, n = 3)
 
 # Create line plot showing RT as a function of degradation
 # Separate panels for each TrialType (rows) and Scrambling condition (columns)
@@ -646,5 +647,6 @@ rt_GrpDegTtScr_line <-
   # Apply custom themes for consistent formatting
   y_axis_theme + x_axis_theme +
   blank_bg_theme + legend_theme + paper_facet_theme
+
 # Display plot
 rt_GrpDegTtScr_line
