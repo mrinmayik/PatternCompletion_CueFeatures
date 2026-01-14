@@ -488,3 +488,41 @@ tau_GrpDegScr_line <-
   blank_bg_theme + legend_theme + paper_facet_theme
 # Display plot
 tau_GrpDegScr_line
+
+############## Analyse Bias (beta) and Boundary Separation (alpha) ##############
+
+alphabeta_data_Grp <- driftdiffusion_data %>%
+  select(-c("delta", "tau")) %>%
+  pivot_longer(cols = c("alpha", "beta"),
+               names_to = "Parameter",
+               values_to = "ParamVal") %>% 
+  group_by(Participant, Parameter, Group) %>%
+  summarise(ParamVal = mean(ParamVal))
+
+alphabeta_Grp_ttest <- full_join(
+  alphabeta_data_Grp %>% 
+    group_by(Parameter) %>% 
+    rstatix::t_test(formula = ParamVal ~ Group,
+                    paired = FALSE),
+  alphabeta_data_Grp %>% 
+    group_by(Parameter) %>% 
+    rstatix::cohens_d(formula = ParamVal ~ Group,
+                      paired = FALSE),
+  by = join_by(Parameter, .y., group1, group2, n1, n2)
+)
+
+beta_Grp_oneway <- full_join(
+  alphabeta_data_Grp %>% 
+    filter(Parameter == "beta") %>% 
+    group_by(Group) %>% 
+    rstatix::t_test(formula = ParamVal ~ 1,
+                    mu = 0.5),
+  alphabeta_data_Grp %>% 
+    filter(Parameter == "beta") %>% 
+    group_by(Group) %>% 
+    rstatix::cohens_d(formula = ParamVal ~ 1,
+                      mu = 0.5),
+  by = join_by(Group, .y., group1, group2, n)
+) %>% 
+  as.data.frame() %>% 
+  do(correct_p_vals(., "p"))
