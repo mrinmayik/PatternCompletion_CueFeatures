@@ -90,16 +90,27 @@ summarise_data <- function(df, col_name, rm_na = FALSE){
 ################## Plotting Themes ##################
 # Define consistent themes for paper-quality visualizations
 # Theme for facet labels and panel borders
-paper_facet_theme <- theme(strip.text.x = element_text(size = 22, colour = "black"),
-                           strip.text.y = element_text(size = 22, colour = "black"), 
-                           strip.background = element_rect(color="white", fill="white", linewidth=1.5, linetype="solid"),
-                           panel.border = element_rect(colour = "black", fill = NA, linewidth=1.5))
+paper_facet_theme <- theme(strip.text.x = element_text(size = 22, 
+                                                       colour = "black"),
+                           strip.text.y = element_text(size = 22, 
+                                                       colour = "black"), 
+                           strip.background = element_rect(color = "white", 
+                                                           fill = "white", 
+                                                           linewidth = 1.5, 
+                                                           linetype = "solid"),
+                           panel.border = element_rect(colour = "black", 
+                                                       fill = NA, 
+                                                       linewidth=1.5),
+                           strip.placement = "outside",)
 # Theme for x-axis formatting
 x_axis_theme <- theme(axis.title.x = element_blank(), 
-                      axis.text.x = element_text(colour = "#000000", size = 18)) 
+                      axis.text.x = element_text(colour = "#000000",
+                                                 size = 20)) 
 # Theme for y-axis formatting
-y_axis_theme <-   theme(axis.title.y = element_text(colour = "#000000", size = 22), 
-                        axis.text.y = element_text(colour = "#000000", size = 18))
+y_axis_theme <-   theme(axis.title.y = element_text(colour = "#000000",
+                                                    size = 22), 
+                        axis.text.y = element_text(colour = "#000000",
+                                                   size = 20))
 # Theme for clean background without grid lines
 blank_bg_theme <- theme(panel.grid.major = element_blank(), 
                         panel.grid.minor = element_blank(),
@@ -107,9 +118,12 @@ blank_bg_theme <- theme(panel.grid.major = element_blank(),
                         axis.line = element_line(colour = "black"))
 # Theme for legend formatting
 legend_theme <- theme(legend.text = element_text(face = "bold", size = 20), 
-                      legend.title = element_text(face = "bold", size = 25))
+                      legend.title = element_text(face = "bold", size = 25),
+                      legend.position = "bottom")
 # Theme for title formatting
-title_theme <- theme(plot.title = element_text(face = "bold", size = 25, hjust = 0.5), 
+title_theme <- theme(plot.title = element_text(face = "bold", 
+                                               size = 25, 
+                                               hjust = 0.5), 
                      legend.key.size=unit(1.3, "cm"))
 
 
