@@ -84,7 +84,8 @@ badtrials_GrpDegTtScr_anova <- anova_test(data = badtrials_GrpDegTtScr,
                                           wid = Participant,
                                           between = Group,
                                           within = c(TrialType, Degradation, Scrambling),
-                                          type = 3)
+                                          type = 3, 
+                                          effect.size = "pes")
 
 # Probe the Group x Degradation interaction in the proportion of bad trials
 # Aggregate bad trials by Group and Degradation only (collapsing across TrialType and Scrambling)
@@ -104,10 +105,20 @@ badtrials_GrpDeg <- bad_trials %>%
 
 # Post-hoc paired t-tests comparing bad trial rates across degradation levels
 # Performed separately for each group to test if exclusion rates change with degradation
-badtrials_GrpDeg_posthoc <- badtrials_GrpDeg %>% 
-  group_by(Group) %>% 
-  t_test(formula = PercBadTrials ~ Degradation,
-         paired = T)
+badtrials_GrpDeg_posthoc <- full_join(
+  # Contrast
+  badtrials_GrpDeg %>% 
+    group_by(Group) %>% 
+    t_test(formula = PercBadTrials ~ Degradation,
+           paired = T),
+  # Cohen's d effect size
+  badtrials_GrpDeg %>% 
+    group_by(Group) %>% 
+    cohens_d(formula = PercBadTrials ~ Degradation,
+             paired = T),
+  by = c("Group", ".y.", "group1", "group2", "n1", "n2")) %>% 
+  select(-c("p.adj", "p.adj.signif")) %>% 
+  correct_p_vals("p")
 
 ########## Accuracy ########
 
@@ -368,13 +379,13 @@ acc_GrpDegTt_line <-
   scale_fill_manual(values = factor_labels$Group$colours) +
   scale_color_manual(values = factor_labels$Group$colours) +
   # Set y-axis breaks and expansion
-  scale_y_continuous(breaks = c(25, 50, 75, 100), 
+  scale_y_continuous(breaks = c(50, 75, 100), 
                      expand = expansion(mult = c(0, 0.1))) +
   # Set x-axis breaks at actual degradation levels
   scale_x_continuous(breaks = c(40, 70, 85, 95),
                      expand = expansion(mult = c(0.1, 0.1))) +
   # Set y-axis limits (allows slight overflow for annotations)
-  coord_cartesian(ylim = c(25, 102)) +
+  coord_cartesian(ylim = c(35, 102)) +
   # Add horizontal line at chance level (50%)
   geom_hline(yintercept = 50, linetype = "dashed") + 
   # Apply custom themes for consistent formatting
@@ -407,10 +418,10 @@ acc_GDTt.predline <-
   scale_fill_manual(values = factor_labels$Group$colours) +
   scale_color_manual(values = factor_labels$Group$colours) +
   # Set y-axis breaks and expansion
-  scale_y_continuous(breaks = c(25, 50, 75, 100), 
+  scale_y_continuous(breaks = c(50, 75, 100), 
                      expand = expansion(mult = c(0, 0.1))) +
   # Set y-axis limits
-  coord_cartesian(ylim = c(25, 102)) +
+  coord_cartesian(ylim = c(35, 102)) +
   # Add horizontal line at chance level (50%)
   geom_hline(yintercept = 50, linetype = "dashed") + 
   # Apply custom themes for consistent formatting
