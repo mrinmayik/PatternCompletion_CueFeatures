@@ -1,6 +1,6 @@
 # Load hBayesDM package for drift diffusion modeling
 # Install if not already installed
-if(!("hBayesDM" %in% rownames(installed.packages()))){
+if (!("hBayesDM" %in% rownames(installed.packages()))) {
   install.packages("hBayesDM")
 }
 library(hBayesDM)
@@ -15,15 +15,21 @@ library(hBayesDM)
 #   participants, factor_labels, derivatives_path, and plotting themes.
 #
 # Args:
-#   dataset_path: Path to the data directory containing participant folders.
-#     Each participant folder should contain a {Participant}_TrialData.tsv file.
+#   test_data: Dataframe containing test phase behavioural data.
 #   output_folder_modifier: String used as the output folder name under
 #     derivatives_path (e.g., "MaximalModel" creates derivatives/MaximalModel/).
 #
+# Outputs:
+#   - Model .RData files saved to derivatives_path/output_folder_modifier/Models/
+#   - Diagnostic plots saved to derivatives_path/output_folder_modifier/DiagnosticPlots/
+#   - DDMParams.csv with per-participant parameters compiled across all conditions,
+#     saved to derivatives_path/output_folder_modifier/
+#
 # Returns:
-#   A dataframe tracking the status of each condition (Completed/Skipped/Error).
+#   A list containing two dataframes: 
+#   - condition_tracker: Tracking the status of each condition (Completed/Skipped/Error)
+#   - participant_ddm_params: DDM parameters for each participant
 run_ddm <- function(test_data, output_folder_modifier) {
-
   set.seed(1)
 
   ############## Read in behavioural data and organise it ############
@@ -34,24 +40,30 @@ run_ddm <- function(test_data, output_folder_modifier) {
     filter(!(is.na(RT) | RT <= 100)) %>%
     # Determine what the correct response should be based on trial type
     # "Old" trials should be responded to as "Old", all others as "New"
-    mutate(CorrectResponse = ifelse(TrialType == "Old",
-                                    "Old",
-                                    "New"),
-           # Convert variables to factors with specified levels
-           Group = factor(Group,
-                          levels = factor_labels$Group$levels),
-           TrialType = factor(TrialType,
-                              levels = factor_labels$TrialType$levels),
-           Scrambling = factor(Scrambling,
-                               levels = factor_labels$Scrambling$levels))
+    mutate(
+      CorrectResponse = ifelse(TrialType == "Old",
+        "Old",
+        "New"
+      ),
+      # Convert variables to factors with specified levels
+      Group = factor(Group,
+        levels = factor_labels$Group$levels
+      ),
+      TrialType = factor(TrialType,
+        levels = factor_labels$TrialType$levels
+      ),
+      Scrambling = factor(Scrambling,
+        levels = factor_labels$Scrambling$levels
+      )
+    )
 
   ############## Run DDM for each condition ############
 
   # Define all condition levels for the 2 x 4 x 2 x 3 design
-  groups <- unique(ddm_data$Group)              # YA, OA
-  degradations <- unique(ddm_data$Degradation)  # 40, 70, 85, 95
-  scramblings <- unique(ddm_data$Scrambling)    # Intact, Scrambled
-  trialtypes <- unique(ddm_data$TrialType)      # Old, Similar, New
+  groups <- factor_labels$Group$levels # YA, OA
+  degradations <- factor_labels$Degradation$levels # 40, 70, 85, 95
+  scramblings <- factor_labels$Scrambling$levels # Intact, Scrambled
+  trialtypes <- factor_labels$TrialType$levels # Old, Similar, New
 
   # Create output directory for DDM model results if it doesn't exist
   ddm_output_path <- paste0(derivatives_path, output_folder_modifier, "/Models/")
@@ -73,17 +85,22 @@ run_ddm <- function(test_data, output_folder_modifier) {
     TrialType = trialtypes,
     stringsAsFactors = FALSE
   ) %>%
-    mutate(ConditionID = row_number(),
-           Status = "Pending")
+    mutate(
+      ConditionID = row_number(),
+      Status = "Pending"
+    )
 
   # Save condition tracker for reference
   write.csv(condition_tracker,
-            file = paste0(derivatives_path, output_folder_modifier, "/ConditionTracker.csv"),
-            row.names = FALSE)
+    file = paste0(derivatives_path, output_folder_modifier, "/ConditionTracker.csv"),
+    row.names = FALSE
+  )
+
+  # Initialize dataframe to compile individual DDM parameters across conditions
+  ddm_params <- c()
 
   # Loop through all conditions and run DDM
-  for(i in 1:nrow(condition_tracker)){
-
+  for (i in 1:nrow(condition_tracker)) {
     # Get current condition parameters
     curr_group <- condition_tracker$Group[i]
     curr_deg <- condition_tracker$Degradation[i]
@@ -93,24 +110,30 @@ run_ddm <- function(test_data, output_folder_modifier) {
 
     # Print progress
     cat(sprintf("\n========== Condition %d of %d ==========\n", i, nrow(condition_tracker)))
-    cat(sprintf("Group: %s, Degradation: %s%%, Scrambling: %s, TrialType: %s\n",
-                curr_group, curr_deg, curr_scr, curr_tt))
+    cat(sprintf(
+      "Group: %s, Degradation: %s%%, Scrambling: %s, TrialType: %s\n",
+      curr_group, curr_deg, curr_scr, curr_tt
+    ))
 
     # Filter data for current condition
     curr_data <- ddm_data %>%
-      filter(Group == curr_group,
-             Degradation == curr_deg,
-             Scrambling == curr_scr,
-             TrialType == curr_tt)
+      filter(
+        Group == curr_group,
+        Degradation == curr_deg,
+        Scrambling == curr_scr,
+        TrialType == curr_tt
+      )
 
     # Check if there is sufficient data for this condition
     n_trials <- nrow(curr_data)
     n_participants <- length(unique(curr_data$Participant))
 
-    cat(sprintf("Number of trials: %d, Number of participants: %d\n",
-                n_trials, n_participants))
+    cat(sprintf(
+      "Number of trials: %d, Number of participants: %d\n",
+      n_trials, n_participants
+    ))
 
-    if(n_trials < 10 || n_participants < 2){
+    if (n_trials < 10 || n_participants < 2) {
       cat("Insufficient data for this condition. Skipping.\n")
       condition_tracker$Status[i] <- "Skipped - Insufficient data"
       next
@@ -137,94 +160,139 @@ run_ddm <- function(test_data, output_folder_modifier) {
     #   nwarmup: number of warmup iterations (discarded)
     #   nchain: number of MCMC chains
     #   ncore: number of CPU cores to use
-    tryCatch({
-      ddm_model <- choiceRT_ddm(
-        data = ddm_input,
-        ncore = 6,
-        niter = 15000,
-        nwarmup = 2000,
-        nchain = 6,
-        max_treedepth = 20
-      )
+    tryCatch(
+      {
+        ddm_model <- choiceRT_ddm(
+          data = ddm_input,
+          ncore = 6,
+          niter = 15000,
+          nwarmup = 2000,
+          nchain = 6,
+          max_treedepth = 20
+        )
 
-      # Save the model output
-      output_filename <- sprintf("DDM_%s_%s_%s_%s.RData",
-                                 curr_group, curr_deg, curr_scr, curr_tt)
-      save(ddm_model, file = paste0(ddm_output_path, output_filename))
-      cat(sprintf("Model saved to: %s\n", output_filename))
+        # Save the model output
+        output_filename <- sprintf(
+          "DDM_%s_%s_%s_%s.RData",
+          curr_group, curr_deg, curr_scr, curr_tt
+        )
+        save(ddm_model, file = paste0(ddm_output_path, output_filename))
+        cat(sprintf("Model saved to: %s\n", output_filename))
 
-      # Save diagnostic plots
-      # Create base filename for plots
-      plot_basename <- sprintf("DDM_%s_%s_%s_%s",
-                               curr_group, curr_deg, curr_scr, curr_tt)
+        # Extract individual participant parameters and add condition info
+        ddm_params <- ddm_params %>%
+          bind_rows(ddm_model$allIndPars %>%
+            mutate(
+              Group = curr_group,
+              Degradation = curr_deg,
+              Scrambling = curr_scr,
+              TrialType = curr_tt
+            ) %>%
+            relocate(subjID, Group, Degradation, Scrambling, TrialType) %>%
+            dplyr::rename(Participant = subjID))
 
-      # Setup data to plot diagnostic plots
-      ddm_draws <- lapply(c("alpha", "beta", "delta", "tau"),
-                          function(param_name){
-                            data.frame(Parameter = param_name,
-                                       Draw = 1:13000,
-                                       ParamVal = ddm_model$parVals[[paste0("mu_", param_name)]]) %>%
-                              group_by(Draw) %>%
-                              mutate(Chain = 1:6)
-                          })
-      ddm_draws <- do.call("rbind", ddm_draws) %>%
-        mutate(Chain = factor(Chain),
-               Parameter = factor(Parameter,
-                                  levels = c("alpha", "beta", "delta", "tau"),
-                                  labels = c("Boundary Separation",
-                                             "Bias",
-                                             "Drift Rate",
-                                             "Non-decision Time")))
+        # Save diagnostic plots
+        # Create base filename for plots
+        plot_basename <- sprintf(
+          "DDM_%s_%s_%s_%s",
+          curr_group, curr_deg, curr_scr, curr_tt
+        )
 
-      # Make and save trace plot (shows MCMC chain convergence)
-      trace_plot <- ggplot(ddm_draws,
-                           aes(x = Draw,
-                               y = ParamVal,
-                               color = Chain)) +
-        geom_line() +
-        facet_wrap(~Parameter, nrow = 2, scales = "free_y") +
-        # Apply custom themes for consistent formatting
-        y_axis_theme + x_axis_theme +
-        blank_bg_theme + legend_theme + paper_facet_theme
-      # Save
-      trace_filename <- paste0(diagnostic_plot_path, plot_basename, "_trace.png")
-      png(trace_filename, width = 1200, height = 800)
-      print(trace_plot)
-      dev.off()
-      cat(sprintf("Trace plot saved to: %s\n", trace_filename))
+        # Setup data to plot diagnostic plots
+        ddm_draws <- lapply(
+          c("alpha", "beta", "delta", "tau"),
+          function(param_name) {
+            data.frame(
+              Parameter = param_name,
+              Draw = 1:13000,
+              ParamVal = ddm_model$parVals[[paste0("mu_", param_name)]]
+            ) %>%
+              group_by(Draw) %>%
+              mutate(Chain = 1:6)
+          }
+        )
+        ddm_draws <- do.call("rbind", ddm_draws) %>%
+          mutate(
+            Chain = factor(Chain),
+            Parameter = factor(Parameter,
+              levels = c("alpha", "beta", "delta", "tau"),
+              labels = c(
+                "Boundary Separation",
+                "Bias",
+                "Drift Rate",
+                "Non-decision Time"
+              )
+            )
+          )
+
+        # Make and save trace plot (shows MCMC chain convergence)
+        trace_plot <- ggplot(
+          ddm_draws,
+          aes(
+            x = Draw,
+            y = ParamVal,
+            color = Chain
+          )
+        ) +
+          geom_line() +
+          facet_wrap(~Parameter, nrow = 2, scales = "free_y") +
+          # Apply custom themes for consistent formatting
+          y_axis_theme +
+          x_axis_theme +
+          blank_bg_theme +
+          legend_theme +
+          paper_facet_theme
+        # Save
+        trace_filename <- paste0(diagnostic_plot_path, plot_basename, "_trace.png")
+        png(trace_filename, width = 1200, height = 800)
+        print(trace_plot)
+        dev.off()
+        cat(sprintf("Trace plot saved to: %s\n", trace_filename))
 
 
-      # Save posterior density plot (shows parameter distributions)
-      postdens_plot <- ggdensity(data = ddm_draws,
-                                 x = "ParamVal",
-                                 color = "Chain",
-                                 size = 1) +
-        facet_wrap(~Parameter, nrow = 2, scales = "free") +
-        x_axis_theme + y_axis_theme + blank_bg_theme +
-        paper_facet_theme +
-        theme(axis.text.x = element_text(size = 16),
-              axis.text.y = element_text(size = 16),
-              strip.text.x = element_text(size = 30))
+        # Save posterior density plot (shows parameter distributions)
+        postdens_plot <- ggdensity(
+          data = ddm_draws,
+          x = "ParamVal",
+          color = "Chain",
+          size = 1
+        ) +
+          facet_wrap(~Parameter, nrow = 2, scales = "free") +
+          x_axis_theme + y_axis_theme + blank_bg_theme +
+          paper_facet_theme +
+          theme(
+            axis.text.x = element_text(size = 16),
+            axis.text.y = element_text(size = 16),
+            strip.text.x = element_text(size = 30)
+          )
 
-      # Save
-      density_filename <- paste0(diagnostic_plot_path, plot_basename, "_density.png")
-      png(density_filename, width = 1200, height = 800)
-      print(postdens_plot)
-      dev.off()
-      cat(sprintf("Density plot saved to: %s\n", density_filename))
+        # Save
+        density_filename <- paste0(diagnostic_plot_path, plot_basename, "_density.png")
+        png(density_filename, width = 1200, height = 800)
+        print(postdens_plot)
+        dev.off()
+        cat(sprintf("Density plot saved to: %s\n", density_filename))
 
-      condition_tracker$Status[i] <- "Completed"
-
-    }, error = function(e){
-      cat(sprintf("Error running DDM: %s\n", e$message))
-      condition_tracker$Status[i] <- paste("Error:", e$message)
-    })
+        condition_tracker$Status[i] <- "Completed"
+      },
+      error = function(e) {
+        cat(sprintf("Error running DDM: %s\n", e$message))
+        condition_tracker$Status[i] <- paste("Error:", e$message)
+      }
+    )
 
     # Update condition tracker file after each iteration
     write.csv(condition_tracker,
-              file = paste0(derivatives_path, output_folder_modifier, "/ConditionTracker.csv"),
-              row.names = FALSE)
+      file = paste0(derivatives_path, output_folder_modifier, "/ConditionTracker.csv"),
+      row.names = FALSE
+    )
   }
+
+  # Write compiled DDM parameters to CSV
+  write.csv(ddm_params,
+    file = paste0(derivatives_path, output_folder_modifier, "/DDMParams.csv"),
+    row.names = FALSE
+  )
 
   # Print final summary
   cat("\n========== DDM Analysis Complete ==========\n")
@@ -233,5 +301,8 @@ run_ddm <- function(test_data, output_folder_modifier) {
   cat(sprintf("Errors: %d\n", sum(grepl("Error", condition_tracker$Status))))
   cat(sprintf("\nResults saved to: %s\n", ddm_output_path))
 
-  return(condition_tracker)
+  return(list(
+    "condition_tracker" = condition_tracker,
+    "participant_ddm_params" = ddm_params)
+  )
 }
