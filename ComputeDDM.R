@@ -1,7 +1,7 @@
 # Set working directory and source initialization file
 setwd("~/GitDir/CodeWithPapers/PatternCompletion_CueFeatures/")
 source("Initialise.R")
-source("RunDDM.R")
+source("DDMFunctions/RunDDM.R")
 
 ############## Read in behavioural data and organise it ############
 
