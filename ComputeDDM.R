@@ -12,7 +12,7 @@ behavioural_data <- c()
 for(part in unique(participants$Participant)){
   # Read TSV file containing task events for each participant
   part_data <- read.table(paste0(data_path, part, "/", part, "_Data.tsv"),
-                          header=TRUE,
+                          header = TRUE,
                           sep = "\t")
   # Combine with existing data
   behavioural_data <- bind_rows(behavioural_data, part_data)
