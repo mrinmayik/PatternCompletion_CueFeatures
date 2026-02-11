@@ -18,7 +18,7 @@ behavioural_data <- c()
 # Loop through all participants and read their task event files
 for(part in unique(participants$Participant)){
   # Read TSV file containing task events for each participant
-  part_data <- read.table(paste0(data_path, part, "/", part, "_Data.tsv"),
+  part_data <- read.table(paste0(data_path, part, "/", part, "_TrialData.tsv"),
                           header=TRUE,
                           sep = "\t")
   # Combine with existing data
@@ -95,7 +95,7 @@ for(i in 1:nrow(condition_tracker)){
   
   # Print progress
   cat(sprintf("\n========== Condition %d of %d ==========\n", i, nrow(condition_tracker)))
-  cat(sprintf("Group: %s, Degradation: %s, Scrambling: %s, TrialType: %s\n",
+  cat(sprintf("Group: %s, Degradation: %s%, Scrambling: %s, TrialType: %s\n",
               curr_group, curr_deg, curr_scr, curr_tt))
   
   # Filter data for current condition
@@ -150,14 +150,14 @@ for(i in 1:nrow(condition_tracker)){
     )
     
     # Save the model output
-    output_filename <- sprintf("DDM_Grp%s_Deg%s_Scr%s_Tt%s.RData",
+    output_filename <- sprintf("DDM_%s_%s_%s_%s.RData",
                                curr_group, curr_deg, curr_scr, curr_tt)
     save(ddm_model, file = paste0(ddm_output_path, output_filename))
     cat(sprintf("Model saved to: %s\n", output_filename))
     
     # Save diagnostic plots
     # Create base filename for plots
-    plot_basename <- sprintf("DDM_Grp%s_Deg%s_Scr%s_Tt%s",
+    plot_basename <- sprintf("DDM_%s_%s_%s_%s",
                              curr_group, curr_deg, curr_scr, curr_tt)
     
     # Setup data to plot diagnostic plots
@@ -197,7 +197,7 @@ for(i in 1:nrow(condition_tracker)){
     
     
     # Save posterior density plot (shows parameter distributions)
-    postdens_plot <- ggdensity(data = ParamDraws,
+    postdens_plot <- ggdensity(data = ddm_draws,
                                x = "ParamVal",
                                color = "Chain", 
                                size = 1) +
