@@ -1,3 +1,5 @@
+library(RWiener)
+
 # Function to simulate accuracy and RT data based on DDM parameters.
 #
 # Simulates responses using the Wiener diffusion model (rwiener) for each
@@ -9,10 +11,10 @@
 # factors. For example, if "alpha" does not vary by Degradation, the same
 # alpha value is used across all Degradation levels. The function automatically
 # detects which parameters vary by which factors by checking for "collapsed"
-# values in median_params_df.
+# values in mean_params_df.
 #
 # Args:
-#   median_params_df: A dataframe containing parameter values for the DDM.
+#   mean_params_df: A dataframe containing parameter values for the DDM.
 #     Required columns: Parameter (alpha, tau, beta, delta), Group,
 #     Degradation, Scrambling, TrialType, and ParamVal (the parameter
 #     values). When a parameter is fixed across a factor, that factor's
@@ -39,13 +41,13 @@
 #     "delta").
 #   param_variation: Dataframe indicating which factors each parameter varies
 #     by (output of the variation detection step in simulate_DDM).
-#   median_params_df: The full parameter dataframe to look up values from.
+#   mean_params_df: The full parameter dataframe to look up values from.
 #   grp, deg, scr, tt: The current condition's factor levels.
 #
 # Returns:
 #   The parameter value (numeric scalar) for the given parameter and condition.
 lookup_ddm_param <- function(param_name, param_variation,
-                             median_params_df,
+                             mean_params_df,
                              grp, deg, scr, tt) {
 
   # Get the variation flags for this specific parameter
@@ -64,7 +66,7 @@ lookup_ddm_param <- function(param_name, param_variation,
                              as.character(tt), "collapsed")
 
   # Filter to the matching row and extract the parameter value
-  median_params_df %>%
+  mean_params_df %>%
     filter(Parameter == param_name,
            Group == lookup_group,
            Degradation == lookup_degradation,
@@ -74,19 +76,19 @@ lookup_ddm_param <- function(param_name, param_variation,
 }
 
 
-simulate_DDM <- function(median_params_df,
+simulate_DDM <- function(mean_params_df,
                          comparison_data) {
+  set.seed(1)
 
   # ---- Step 1: Determine which factors each parameter varies by ----
   # For each DDM parameter, check whether it has different values across
   # levels of each experimental factor, or is "collapsed" (fixed) across
   # that factor. This is used later to look up the correct parameter value
   # for each simulated condition.
-  param_variation <- median_params_df %>%
+  param_variation <- mean_params_df %>%
     group_by(Parameter) %>%
     summarise(
-      varies_by_group = n_distinct(Group) > 1 &&
-        !any(Group == "collapsed"),
+      varies_by_group = !any(Group == "collapsed"),
       varies_by_degradation = n_distinct(Degradation) > 1 &&
         !any(Degradation == "collapsed"),
       varies_by_scrambling = n_distinct(Scrambling) > 1 &&
@@ -126,16 +128,16 @@ simulate_DDM <- function(median_params_df,
     # different subsets of factors (e.g., alpha varies by Group only,
     # but delta varies by Group and TrialType).
     alpha_val <- lookup_ddm_param("alpha", param_variation,
-                                  median_params_df,
+                                  mean_params_df,
                                   grp, deg, scr, tt)
     tau_val   <- lookup_ddm_param("tau", param_variation,
-                                  median_params_df,
+                                  mean_params_df,
                                   grp, deg, scr, tt)
     beta_val  <- lookup_ddm_param("beta", param_variation,
-                                  median_params_df,
+                                  mean_params_df,
                                   grp, deg, scr, tt)
     delta_val <- lookup_ddm_param("delta", param_variation,
-                                  median_params_df,
+                                  mean_params_df,
                                   grp, deg, scr, tt)
 
     # ---- Step 3b: Simulate responses ----
@@ -153,21 +155,26 @@ simulate_DDM <- function(median_params_df,
     # Rename columns to distinguish empirical ("Data_") from simulated
     # ("Model_") responses and RTs before combining.
     empirical_renamed <- current_data %>%
-      dplyr::rename(Data_resp = resp,
-                    Data_RT = q)
+      dplyr::rename(Empirical_Response = Response,
+                    Empirical_RT = RT)
 
     simulated_renamed <- simulated %>%
-      dplyr::rename(Model_resp = resp,
-                    Model_RT = q)
-
+      dplyr::rename(Simulated_Response = resp,
+                    Simulated_RT = q) %>% 
+      mutate(Simulated_RT = Simulated_RT*1000,
+             Simulated_Response = as.character(
+               factor(Simulated_Response,
+                      levels = c("lower", "upper"),
+                      labels = c("Old", "New"))))
+    
     combined <- cbind(empirical_renamed, simulated_renamed)
 
     # ---- Step 3d: Pivot to long format and compute accuracy ----
     # Reshape so that each row represents either a "Data" (empirical) or
     # "Model" (simulated) observation, with columns resp and RT.
     combined_long <- combined %>%
-      pivot_longer(cols = starts_with(c("Data", "Model")),
-                   names_to = c("Var", ".value"),
+      pivot_longer(cols = starts_with(c("Empirical", "Simulated")),
+                   names_to = c("EmpSim", ".value"),
                    names_sep = "_")
 
     # Code accuracy: recode trial type to the expected Wiener response
@@ -175,12 +182,7 @@ simulate_DDM <- function(median_params_df,
     # actual response matches the expected boundary.
     combined_long <- combined_long %>%
       mutate(
-        TrialType_recoded = factor(
-          TrialType,
-          levels = c("Old", "Similar", "New"),
-          labels = c("lower", "upper", "upper")
-        ),
-        Acc = ifelse(TrialType_recoded == resp, 1, 0)
+        Acc = ifelse(CorrectResponse == Response, 1, 0)
       )
 
     all_simulations <- bind_rows(all_simulations, combined_long)

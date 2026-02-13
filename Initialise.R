@@ -3,7 +3,7 @@
 ################## Package Management ##################
 # Check if required packages are installed and install if missing
 required_packages <- c("stringr", "tidyr", "dplyr", "ggplot2", "ggpubr", "ez", "rstatix",
-                       "psychReport")
+                       "psychReport", "RWiener")
 to_be_installed <- required_packages[!(required_packages %in% rownames(installed.packages()))]
 if(length(to_be_installed) > 0){
   for(package in to_be_installed){
