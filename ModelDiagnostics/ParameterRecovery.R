@@ -91,6 +91,13 @@ test_data <- test_data %>%
 
 ############## Parameter Recovery ##############
 
+# ---- Setup paths to save outputs ----
+# Create output directory for parameter recovery results
+param_recovery_path <- paste0(derivatives_path, "ParameterRecovery/")
+if (!dir.exists(param_recovery_path)) {
+  dir.create(param_recovery_path, recursive = TRUE)
+}
+
 # ---- Step 1: Simulate data using original DDM parameters ----
 # For each participant, use their fitted DDM parameters (from Model 8)
 # to generate simulated response data via the Wiener diffusion model.
@@ -152,12 +159,6 @@ recovered_results <- run_ddm(simulated_trials, "ParameterRecovery")
 recovered_params <- recovered_results$participant_ddm_params
 
 # ---- Save simulation and recovery outputs ----
-# Create output directory for parameter recovery results
-param_recovery_path <- paste0(derivatives_path, "ParameterRecovery/")
-if (!dir.exists(param_recovery_path)) {
-  dir.create(param_recovery_path, recursive = TRUE)
-}
-
 # Save the recovered DDM parameters
 write.csv(recovered_params,
           file = paste0(param_recovery_path, "RecoveredParams.csv"),
@@ -184,7 +185,8 @@ recovered_params_long <- recovered_params %>%
 recovered_for_comparison <- bind_rows(
   # delta and tau: keep per-condition values as-is
   recovered_params_long %>%
-    filter(Parameter %in% c("delta", "tau")),
+    filter(Parameter %in% c("delta", "tau")) %>% 
+    mutate(Degradation = as.character(Degradation)),
   # alpha and beta: average across all conditions per participant,
   # since the original values were also collapsed
   recovered_params_long %>%
@@ -218,17 +220,25 @@ print(param_correlations)
 
 # Scatterplot of original vs recovered parameters, faceted by parameter.
 # The dashed identity line (y = x) indicates perfect recovery.
+
+xy_range <- c(min(min(param_comparison$Recovered, na.rm = T), 
+                  min(param_comparison$Original, na.rm = T)),
+              max(max(param_comparison$Recovered, na.rm = T), 
+                  max(param_comparison$Original, na.rm = T)))
 recovery_scatter <- ggscatter(
   param_comparison,
   x = "Original",
   y = "Recovered",
-  size = 1,
-  alpha = 0.5
+  size = 3,
+  alpha = 0.5,
+  color = "Parameter",
 ) +
   geom_abline(intercept = 0, slope = 1,
               linetype = "dashed") +
   labs(x = "Original",
        y = "Recovered") +
+  coord_cartesian(xlim = xy_range,
+                  ylim = xy_range) +
   x_axis_theme + y_axis_theme +
   blank_bg_theme + paper_facet_theme
 
@@ -237,6 +247,35 @@ png(paste0(param_recovery_path, "ParameterRecovery_Scatter.png"),
     width = 1200, height = 1000)
 print(recovery_scatter)
 dev.off()
+
+# Scatterplot of original vs recovered parameters, coloured by parameter.
+# Only plotting first 6 participants for visualisation
+# The dashed identity line (y = x) indicates perfect recovery.
+
+parts_to_plot <- participants$Participant[1:6]
+param_comparison_parts <- param_comparison %>% 
+  filter(Participant %in% parts_to_plot)
+
+xy_range <- c(min(min(parts_to_print$Recovered, na.rm = T), 
+                  min(parts_to_print$Original, na.rm = T)),
+              max(max(parts_to_print$Recovered, na.rm = T), 
+                  max(parts_to_print$Original, na.rm = T)))
+recovery_scatter <- ggscatter(
+  param_comparison,
+  x = "Original",
+  y = "Recovered",
+  size = 3,
+  alpha = 0.5,
+  color = "Parameter",
+) +
+  geom_abline(intercept = 0, slope = 1,
+              linetype = "dashed") +
+  labs(x = "Original",
+       y = "Recovered") +
+  coord_cartesian(xlim = xy_range,
+                  ylim = xy_range) +
+  x_axis_theme + y_axis_theme +
+  blank_bg_theme + paper_facet_theme
 
 write.csv(param_correlations,
           file = paste0(param_recovery_path,
